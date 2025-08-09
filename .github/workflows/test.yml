@@ -1,51 +1,36 @@
-name: Test Student Code
+name: Test and Update
 
 on:
   pull_request:
-    branches:
-      - main
+    types: [opened, synchronize, reopened, closed]
   push:
     branches:
       - main
 
 jobs:
-  build-and-test:
+  update:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake g++
-
-      - name: Build project
+      - name: Set up Git
         run: |
-          cmake .
-          make
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "actions@github.com"
 
-      - name: Run program
-        run: ./main | tee program_output.txt
-
-      - name: Save program output as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: program-logs
-          path: program_output.txt
-
-      - name: Save result to DB
-        if: github.event_name == 'push'
-        run: python3 save_result.py
-
-      - name: Commit updated DB
-        if: github.event_name == 'push'
+      - name: Make changes
         run: |
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Actions"
-          git add results.db
+          echo "Updated at $(date)" >> results.txt
+
+      - name: Commit changes
+        run: |
+          git add .
           git commit -m "Update results [skip ci]" || echo "No changes to commit"
-          git push
+
+      - name: Push changes
+        run: git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
