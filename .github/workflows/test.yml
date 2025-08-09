@@ -43,3 +43,6 @@ jobs:
           git add results.db
           git commit -m "Update results after PR [skip ci]" || echo "No changes to commit"
           git push https://${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }} HEAD:main
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+
