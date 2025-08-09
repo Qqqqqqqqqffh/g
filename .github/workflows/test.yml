@@ -25,7 +25,7 @@ jobs:
         run: ./main | tee program_output.txt
 
       - name: Save program output as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: program-logs
           path: program_output.txt
