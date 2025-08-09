@@ -4,6 +4,9 @@ on:
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
 
 jobs:
   build-and-test:
@@ -13,9 +16,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 0
-
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake g++
@@ -35,9 +36,11 @@ jobs:
           path: program_output.txt
 
       - name: Save result to DB
+        if: github.event_name == 'push'
         run: python3 save_result.py
 
       - name: Commit updated DB
+        if: github.event_name == 'push'
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
