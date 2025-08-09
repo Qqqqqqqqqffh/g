@@ -1,6 +1,7 @@
 #include <iostream>
-#include <vector>
+
 #include <algorithm>
+#include <vector>
 #include <chrono>
 
 int main() {
