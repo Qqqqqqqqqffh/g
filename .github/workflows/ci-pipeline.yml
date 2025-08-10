@@ -23,7 +23,6 @@ jobs:
         sudo apt-get install -y cmake g++ python3-pip
 
     - name: Install Python dependencies
-      run: pip3 install sqlite3
 
     - name: Compile C++ code
       run: |        
