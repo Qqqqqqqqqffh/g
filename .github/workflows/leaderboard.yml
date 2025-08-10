@@ -30,6 +30,12 @@ jobs:
         run: |
           python leaderboard.py
 
+      - name: Send leaderboard image to Telegram
+        run: python send_leaderboard.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
       - name: Commit and push leaderboard image
         run: |
           git config --global user.name "github-actions[bot]"
