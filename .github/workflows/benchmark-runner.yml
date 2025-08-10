@@ -9,15 +9,16 @@ jobs:
   run-benchmark:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    
+
     permissions:
-      contents: write 
-      
+      contents: write
+
     steps:
     - name: Checkout repository at commit from CI Pipeline
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.workflow_run.head_sha }}
+        ref: main
+        fetch-depth: 0
 
     - name: Compile optimized
       run: |
@@ -39,7 +40,7 @@ jobs:
         git add results.db
         if [ -n "$(git status --porcelain)" ]; then
           git commit -m "📊 Update results for ${{ github.actor }}"
-          git push
+          git push origin main
         else
           echo "No changes to commit"
         fi
