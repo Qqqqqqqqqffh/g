@@ -10,6 +10,7 @@ FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_SIZE_TITLE = 36
 FONT_SIZE_TEXT = 24
 TABLE_LIMIT = 10
+GOLD_COLOR = (255, 215, 0)
 
 def get_leaderboard():
     conn = sqlite3.connect(DB_FILE)
@@ -44,8 +45,9 @@ def generate_image(leaderboard):
     y = 120
     for i, (nickname, best_time) in enumerate(leaderboard, start=1):
         microseconds = best_time * 1_000_000
-        draw.text((50, y), f"{i}. {nickname}", font=font_text, fill="black")
-        draw.text((width - 50, y), f"{microseconds:.3f} \u03BCс", font=font_text, fill="black", anchor="rm")
+        color = GOLD_COLOR if i == 1 else "black"
+        draw.text((50, y), f"{i}. {nickname}", font=font_text, fill=color)
+        draw.text((width - 50, y), f"{microseconds:.3f} \u03BCс", font=font_text, fill=color, anchor="rm")
         y += row_height
 
     img.save(OUTPUT_IMAGE)
