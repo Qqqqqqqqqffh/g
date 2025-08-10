@@ -1,0 +1,42 @@
+name: Benchmark Runner
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+
+jobs:
+  run-benchmark:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository at commit from CI Pipeline
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha }}
+
+    - name: Compile optimized
+      run: |
+        cmake .
+        make
+
+    - name: Run optimized program
+      run: ./main | tee program_output.txt
+
+    - name: Save result to database
+      run: python3 save_result.py
+      env:
+        GITHUB_ACTOR: ${{ github.actor }}
+
+    - name: Commit and push database
+      run: |
+        git config user.name "github-actions"
+        git config user.email "actions@users.noreply.github.com"
+        git add results.db
+        if [ -n "$(git status --porcelain)" ]; then
+          git commit -m "📊 Update results for ${{ github.actor }}"
+          git push
+        else
+          echo "No changes to commit"
+        fi
