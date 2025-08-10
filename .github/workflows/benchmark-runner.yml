@@ -12,35 +12,60 @@ jobs:
 
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
-    - name: Checkout repository at commit from CI Pipeline
+    - name: Checkout repository
       uses: actions/checkout@v4
       with:
         ref: main
         fetch-depth: 0
 
-    - name: Compile optimized
+    - name: Install tools
       run: |
-        cmake .
-        make
+        sudo apt-get update
+        sudo apt-get install -y valgrind
 
-    - name: Run optimized program
-      run: ./main | tee program_output.txt
+    - name: Compile optimized (save logs)
+      run: |
+        cmake . > compile_stdout.log 2> compile_stderr.log
+        make >> compile_stdout.log 2>> compile_stderr.log
+
+    - name: Run cuda-memcheck
+      run: |
+        cuda-memcheck ./main > cuda_memcheck.log 2>&1 || true
+
+    - name: Run valgrind check
+      run: |
+        valgrind --leak-check=full --error-exitcode=1 ./main > valgrind_stdout.log 2> valgrind_stderr.log || true
+
+    - name: Run optimized program (save logs)
+      run: |
+        ./main > run_stdout.log 2> run_stderr.log
 
     - name: Save result to database
       run: python3 save_result.py
       env:
         GITHUB_ACTOR: ${{ github.actor }}
 
-    - name: Commit and push database
+    - name: Commit logs and database
       run: |
         git config user.name "github-actions"
         git config user.email "actions@users.noreply.github.com"
-        git add results.db
+        git add results.db compile_stdout.log compile_stderr.log run_stdout.log run_stderr.log cuda_memcheck.log valgrind_stdout.log valgrind_stderr.log
         if [ -n "$(git status --porcelain)" ]; then
-          git commit -m "📊 Update results for ${{ github.actor }}"
+          git commit -m "📊 Update results and logs for ${{ github.actor }}"
           git push origin main
         else
           echo "No changes to commit"
         fi
+
+    - name: Comment PR if valgrind errors found
+      if: always()
+      run: |
+        if grep -q "ERROR SUMMARY: [^0]*[1-9]" valgrind_stderr.log; then
+          gh pr comment ${{ github.event.workflow_run.pull_requests[0].number }} \
+            --body "⚠ Valgrind detected memory issues:\n\`\`\`\n$(cat valgrind_stderr.log)\n\`\`\`"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
