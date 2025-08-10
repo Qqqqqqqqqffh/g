@@ -1,9 +1,9 @@
 #include <iostream>
 
+
+#include <chrono>
 #include <algorithm>
 #include <vector>
-#include <chrono>
-
 int main() {
     std::vector<int> arr = {5, 3, 8, 4, 2};
     auto start = std::chrono::high_resolution_clock::now();
