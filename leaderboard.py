@@ -1,11 +1,11 @@
 import sqlite3
+import requests
+from io import BytesIO
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
-import os
 
 DB_FILE = "results.db"
 OUTPUT_IMAGE = "leaderboard.png"
-AVATARS_DIR = "avatars"  # локальная папка с аватарками
 
 TITLE = "Таблица лидеров"
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -13,8 +13,10 @@ FONT_SIZE_TITLE = 36
 FONT_SIZE_TEXT = 24
 TABLE_LIMIT = 10
 GOLD_COLOR = (255, 215, 0)
+AVATAR_SIZE = 40
 
-AVATAR_SIZE = 32  # размер мини-аватарки
+# Ссылка на RAW файлы в GitHub
+GITHUB_AVATAR_URL = "https://raw.githubusercontent.com/Qqqqqqqqqffh/g/main/avatars/"
 
 def get_leaderboard():
     conn = sqlite3.connect(DB_FILE)
@@ -30,9 +32,23 @@ def get_leaderboard():
     conn.close()
     return rows
 
+def get_avatar(nickname):
+    """Пытается скачать аватарку PNG или JPG. Возвращает Image или None."""
+    for ext in ["png", "jpg", "jpeg"]:
+        url = f"{GITHUB_AVATAR_URL}{nickname}.{ext}"
+        try:
+            r = requests.get(url, timeout=5)
+            if r.status_code == 200:
+                img = Image.open(BytesIO(r.content)).convert("RGBA")
+                img = img.resize((AVATAR_SIZE, AVATAR_SIZE), Image.LANCZOS)
+                return img
+        except Exception:
+            pass
+    return None
+
 def generate_image(leaderboard):
     width = 600
-    row_height = 50
+    row_height = AVATAR_SIZE + 10
     height = 150 + len(leaderboard) * row_height
 
     img = Image.new("RGB", (width, height), "white")
@@ -41,8 +57,10 @@ def generate_image(leaderboard):
     font_title = ImageFont.truetype(FONT_PATH, FONT_SIZE_TITLE)
     font_text = ImageFont.truetype(FONT_PATH, FONT_SIZE_TEXT)
 
+    # Заголовок
     draw.text((width // 2, 20), TITLE, font=font_title, fill="black", anchor="mm")
 
+    # Время обновления
     now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
     draw.text((width // 2, 70), f"Обновлено: {now_str}", font=font_text, fill="gray", anchor="mm")
 
@@ -51,21 +69,16 @@ def generate_image(leaderboard):
         microseconds = best_time * 1_000_000
         color = GOLD_COLOR if i == 1 else "black"
 
-        # Путь к аватарке
-        avatar_path = os.path.join(AVATARS_DIR, f"{nickname}.png")
-        if os.path.exists(avatar_path):
-            avatar_img = Image.open(avatar_path).convert("RGBA")
-            avatar_img = avatar_img.resize((AVATAR_SIZE, AVATAR_SIZE))
-            img.paste(avatar_img, (50, y - 5), avatar_img)  # вставка с прозрачностью
-            text_x = 50 + AVATAR_SIZE + 10
-        else:
-            text_x = 50
+        # Загружаем аватарку
+        avatar = get_avatar(nickname)
+        x_offset = 50
 
-        # Никнейм
-        draw.text((text_x, y), f"{i}. {nickname}", font=font_text, fill=color)
+        if avatar:
+            img.paste(avatar, (x_offset, y), avatar)
+            x_offset += AVATAR_SIZE + 10  # смещение для текста
 
-        # Время
-        draw.text((width - 50, y), f"{microseconds:.3f} μс", font=font_text, fill=color, anchor="rm")
+        draw.text((x_offset, y + AVATAR_SIZE // 2), f"{i}. {nickname}", font=font_text, fill=color, anchor="lm")
+        draw.text((width - 50, y + AVATAR_SIZE // 2), f"{microseconds:.3f} μс", font=font_text, fill=color, anchor="rm")
 
         y += row_height
 
