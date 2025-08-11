@@ -1,12 +1,12 @@
-import os
 import sqlite3
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
+import requests
+from io import BytesIO
+import os
 
 DB_FILE = "results.db"
 OUTPUT_IMAGE = "leaderboard.png"
-AVATAR_FOLDER = "avatars"
-DEFAULT_AVATAR = "default.png"
 
 TITLE = "Таблица лидеров"
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -15,7 +15,8 @@ FONT_SIZE_TEXT = 24
 TABLE_LIMIT = 10
 GOLD_COLOR = (255, 215, 0)
 
-AVATAR_SIZE = 32  # размер аватарки в пикселях
+AVATAR_SIZE = 32
+AVATAR_BASE_URL = "https://raw.githubusercontent.com/Qqqqqqqqqffh/g/main/avatars"
 
 def get_leaderboard():
     conn = sqlite3.connect(DB_FILE)
@@ -32,20 +33,22 @@ def get_leaderboard():
     return rows
 
 def load_avatar(nickname):
-    """Загружает аватарку по нику или заглушку."""
-    avatar_path = os.path.join(AVATAR_FOLDER, f"{nickname}.png")
-    if not os.path.exists(avatar_path):
-        avatar_path = os.path.join(AVATAR_FOLDER, DEFAULT_AVATAR)
+    url = f"{AVATAR_BASE_URL}/{nickname}.png"
     try:
-        avatar = Image.open(avatar_path).convert("RGBA")
-        avatar = avatar.resize((AVATAR_SIZE, AVATAR_SIZE))
-    except Exception:
-        avatar = Image.new("RGBA", (AVATAR_SIZE, AVATAR_SIZE), (200, 200, 200, 255))
-    return avatar
+        response = requests.get(url)
+        if response.status_code == 200:
+            img = Image.open(BytesIO(response.content)).convert("RGBA")
+            img = img.resize((AVATAR_SIZE, AVATAR_SIZE))
+            return img
+    except Exception as e:
+        print(f"⚠ Не удалось загрузить аватар для {nickname}: {e}")
+    # Заглушка, если аватар нет
+    img = Image.new("RGBA", (AVATAR_SIZE, AVATAR_SIZE), (200, 200, 200, 255))
+    return img
 
 def generate_image(leaderboard):
     width = 600
-    row_height = 50  # увеличили, чтобы вместить аватарку
+    row_height = 50
     height = 150 + len(leaderboard) * row_height
 
     img = Image.new("RGB", (width, height), "white")
@@ -64,8 +67,11 @@ def generate_image(leaderboard):
         microseconds = best_time * 1_000_000
         color = GOLD_COLOR if i == 1 else "black"
 
-        avatar = load_avatar(nickname)
-        img.paste(avatar, (10, y - 8), avatar)  
+        # Загружаем аватар
+        avatar_img = load_avatar(nickname)
+        img.paste(avatar_img, (50, y - 5), avatar_img)
+
+        # Ник и время
         draw.text((50 + AVATAR_SIZE + 10, y), f"{i}. {nickname}", font=font_text, fill=color)
         draw.text((width - 50, y), f"{microseconds:.3f} μс", font=font_text, fill=color, anchor="rm")
 
