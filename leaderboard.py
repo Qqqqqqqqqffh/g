@@ -1,12 +1,11 @@
 import sqlite3
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
-import requests
-from io import BytesIO
 import os
 
 DB_FILE = "results.db"
 OUTPUT_IMAGE = "leaderboard.png"
+AVATARS_DIR = "avatars"  # локальная папка с аватарками
 
 TITLE = "Таблица лидеров"
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -15,8 +14,7 @@ FONT_SIZE_TEXT = 24
 TABLE_LIMIT = 10
 GOLD_COLOR = (255, 215, 0)
 
-AVATAR_SIZE = 32
-AVATAR_BASE_URL = "https://raw.githubusercontent.com/Qqqqqqqqqffh/g/main/avatars"
+AVATAR_SIZE = 32  # размер мини-аватарки
 
 def get_leaderboard():
     conn = sqlite3.connect(DB_FILE)
@@ -31,20 +29,6 @@ def get_leaderboard():
     rows = cur.fetchall()
     conn.close()
     return rows
-
-def load_avatar(nickname):
-    url = f"{AVATAR_BASE_URL}/{nickname}.png"
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            img = Image.open(BytesIO(response.content)).convert("RGBA")
-            img = img.resize((AVATAR_SIZE, AVATAR_SIZE))
-            return img
-    except Exception as e:
-        print(f"⚠ Не удалось загрузить аватар для {nickname}: {e}")
-    # Заглушка, если аватар нет
-    img = Image.new("RGBA", (AVATAR_SIZE, AVATAR_SIZE), (200, 200, 200, 255))
-    return img
 
 def generate_image(leaderboard):
     width = 600
@@ -67,12 +51,20 @@ def generate_image(leaderboard):
         microseconds = best_time * 1_000_000
         color = GOLD_COLOR if i == 1 else "black"
 
-        # Загружаем аватар
-        avatar_img = load_avatar(nickname)
-        img.paste(avatar_img, (50, y - 5), avatar_img)
+        # Путь к аватарке
+        avatar_path = os.path.join(AVATARS_DIR, f"{nickname}.png")
+        if os.path.exists(avatar_path):
+            avatar_img = Image.open(avatar_path).convert("RGBA")
+            avatar_img = avatar_img.resize((AVATAR_SIZE, AVATAR_SIZE))
+            img.paste(avatar_img, (50, y - 5), avatar_img)  # вставка с прозрачностью
+            text_x = 50 + AVATAR_SIZE + 10
+        else:
+            text_x = 50
 
-        # Ник и время
-        draw.text((50 + AVATAR_SIZE + 10, y), f"{i}. {nickname}", font=font_text, fill=color)
+        # Никнейм
+        draw.text((text_x, y), f"{i}. {nickname}", font=font_text, fill=color)
+
+        # Время
         draw.text((width - 50, y), f"{microseconds:.3f} μс", font=font_text, fill=color, anchor="rm")
 
         y += row_height
