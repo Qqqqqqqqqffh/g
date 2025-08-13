@@ -69,3 +69,17 @@ jobs:
         fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # Новый шаг: сохранение логов в артефактах
+    - name: Upload logs as artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-logs
+        path: |
+          compile_stdout.log
+          compile_stderr.log
+          run_stdout.log
+          run_stderr.log
+          cuda_memcheck.log
+          valgrind_stdout.log
+          valgrind_stderr.log
