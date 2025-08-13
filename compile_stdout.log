@@ -10,7 +10,7 @@
 -- Check for working CXX compiler: /usr/bin/c++ - skipped
 -- Detecting CXX compile features
 -- Detecting CXX compile features - done
--- Configuring done (5.0s)
+-- Configuring done (1.3s)
 -- Generating done (0.0s)
 -- Build files have been written to: /home/runner/work/g/g
 [ 50%] Building CXX object CMakeFiles/main.dir/main.cpp.o
