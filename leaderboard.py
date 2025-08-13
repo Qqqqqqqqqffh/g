@@ -20,28 +20,22 @@ DEFAULT_COLOR = (0, 0, 0)  # Черный цвет по умолчанию
 GITHUB_AVATAR_URL = "https://raw.githubusercontent.com/Qqqqqqqqqffh/g/main/avatars/"
 
 def get_user_color(nickname):
-    """Получает цвет пользователя из БД по его nickname"""
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    
+    """Получает цвет пользователя из базы данных"""
     try:
-        # Ищем цвет через связку account_bindings
-        cur.execute("""
-            SELECT u.color 
-            FROM account_bindings ab
-            JOIN users u ON ab.telegram_id = u.telegram_id
-            WHERE ab.github_username = ?
-        """, (nickname,))
-        
+        conn = sqlite3.connect(DB_FILE)
+        cur = conn.cursor()
+        cur.execute("SELECT color FROM user_prefs WHERE nickname = ?", (nickname,))
         result = cur.fetchone()
+        conn.close()
+        
         if result and result[0]:
-            # Конвертируем HEX в RGB
+            # Преобразуем HEX в RGB
             hex_color = result[0].lstrip('#')
             return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        return DEFAULT_COLOR
     except sqlite3.Error as e:
         print(f"⚠ Ошибка при получении цвета: {e}")
-    
-    return DEFAULT_COLOR
+        return DEFAULT_COLOR
 
 def get_leaderboard():
     conn = sqlite3.connect(DB_FILE)
@@ -55,10 +49,7 @@ def get_leaderboard():
     """, (TABLE_LIMIT,))
     rows = cur.fetchall()
     conn.close()
-    
-    # Добавляем цвет к каждому участнику
-    return [(nickname, best_time, get_user_color(nickname)) 
-            for nickname, best_time in rows]
+    return rows
 
 def get_avatar(nickname):
     """Пытается скачать аватарку PNG или JPG. Возвращает Image или None."""
@@ -93,8 +84,11 @@ def generate_image(leaderboard):
     draw.text((width // 2, 70), f"Обновлено: {now_str}", font=font_text, fill="gray", anchor="mm")
 
     y = 120
-    for i, (nickname, best_time, color) in enumerate(leaderboard, start=1):
+    for i, (nickname, best_time) in enumerate(leaderboard, start=1):
         microseconds = best_time * 1_000_000
+        
+        # Получаем цвет из базы данных
+        color = get_user_color(nickname)
 
         # Загружаем аватарку
         avatar = get_avatar(nickname)
@@ -104,11 +98,8 @@ def generate_image(leaderboard):
             img.paste(avatar, (x_offset, y), avatar)
             x_offset += AVATAR_SIZE + 10  # смещение для текста
 
-        # Используем цвет из БД
-        draw.text((x_offset, y + AVATAR_SIZE // 2), f"{i}. {nickname}", 
-                  font=font_text, fill=color, anchor="lm")
-        draw.text((width - 50, y + AVATAR_SIZE // 2), f"{microseconds:.3f} μс", 
-                  font=font_text, fill=color, anchor="rm")
+        draw.text((x_offset, y + AVATAR_SIZE // 2), f"{i}. {nickname}", font=font_text, fill=color, anchor="lm")
+        draw.text((width - 50, y + AVATAR_SIZE // 2), f"{microseconds:.3f} μс", font=font_text, fill="black", anchor="rm")
 
         y += row_height
 
