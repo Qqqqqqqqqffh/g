@@ -1,8 +1,8 @@
 #include <iostream>
-
-#include <algorithm>
 #include <vector>
 #include <chrono>
+#include <algorithm>
+
 
 int main() {
     std::vector<int> arr = {5, 3, 8, 4, 2};
