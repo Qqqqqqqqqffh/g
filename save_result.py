@@ -2,6 +2,7 @@ import sqlite3
 import os
 import requests
 import base64
+import sys
 from datetime import datetime
 
 # Настройки
@@ -10,9 +11,8 @@ GITHUB_REPO = os.getenv("GITHUB_REPO")
 DB_FILE = "results.db"
 GITHUB_DB_PATH = "results.db"
 
-# Функция для работы с GitHub DB
 def download_db():
-    """Загружает БД с GitHub"""
+    """Загружает базу данных с GitHub"""
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_DB_PATH}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
@@ -28,16 +28,16 @@ def download_db():
                 db_content = base64.b64decode(content)
                 with open(DB_FILE, "wb") as f:
                     f.write(db_content)
-                print("Database downloaded from GitHub")
+                print("✅ База данных загружена с GitHub")
                 return True
-        print("Database not found on GitHub, creating new")
+        print("ℹ️ База данных не найдена на GitHub, создаём новую")
         return False
     except Exception as e:
-        print(f"Error downloading DB: {str(e)}")
+        print(f"⚠️ Ошибка при загрузке базы данных: {str(e)}")
         return False
 
 def upload_db():
-    """Загружает БД на GitHub"""
+    """Загружает базу данных на GitHub"""
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_DB_PATH}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
@@ -46,16 +46,23 @@ def upload_db():
     
     # Проверяем существование файла
     sha = None
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        sha = response.json().get("sha")
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            sha = response.json().get("sha")
+    except:
+        pass
     
     # Читаем содержимое БД
-    with open(DB_FILE, "rb") as f:
-        content = base64.b64encode(f.read()).decode()
+    try:
+        with open(DB_FILE, "rb") as f:
+            content = base64.b64encode(f.read()).decode()
+    except Exception as e:
+        print(f"⚠️ Ошибка чтения файла БД: {str(e)}")
+        return False
     
     data = {
-        "message": "Update database from GitHub Action",
+        "message": "Обновление базы данных через GitHub Action",
         "content": content,
         "sha": sha
     }
@@ -63,67 +70,84 @@ def upload_db():
     try:
         response = requests.put(url, json=data, headers=headers)
         if response.status_code in (200, 201):
-            print("Database uploaded to GitHub")
+            print("✅ База данных загружена на GitHub")
             return True
-        print(f"Failed to upload DB: {response.status_code} - {response.text}")
+        print(f"⚠️ Не удалось загрузить базу данных: {response.status_code} - {response.text}")
         return False
     except Exception as e:
-        print(f"Error uploading DB: {str(e)}")
+        print(f"⚠️ Ошибка при загрузке базы данных: {str(e)}")
         return False
 
-# Основной код
 def main():
     nickname = os.getenv("GITHUB_ACTOR", "unknown")
     exec_time = None
 
-    # Читаем время выполнения из файла
-    try:
-        with open("program_output.txt", "r") as f:
-            for line in f:
-                if "Execution time:" in line:
-                    parts = line.strip().split(": ")
-                    if len(parts) > 1:
-                        exec_time_str = parts[1].split()[0]
-                        exec_time = float(exec_time_str)
-                    break
-    except Exception as e:
-        print(f"Error reading output file: {str(e)}")
-        exec_time = 0.0
+    # Считываем время выполнения из аргумента (в микросекундах)
+    if len(sys.argv) > 1:
+        try:
+            # Принимаем время в микросекундах как целое число
+            exec_time = int(sys.argv[1])
+        except ValueError:
+            print("⚠️ Некорректное значение времени выполнения")
+            exec_time = 0
+    else:
+        print("⚠️ Время выполнения не передано")
+        exec_time = 0
 
-    if exec_time is None:
-        exec_time = 0.0
-
-    # Скачиваем БД
+    # Скачиваем БД или создаем новую
     if not download_db():
-        # Если не удалось скачать, создаем новую
         conn = sqlite3.connect(DB_FILE)
         cur = conn.cursor()
+        # Создаем таблицы с правильными типами данных
         cur.execute("""
         CREATE TABLE IF NOT EXISTS results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nickname TEXT,
-            exec_time REAL,
-            timestamp TEXT
+            nickname TEXT NOT NULL,
+            exec_time INTEGER NOT NULL,  -- В микросекундах
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
         """)
+        
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_prefs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nickname TEXT UNIQUE NOT NULL,
+            color TEXT,
+            telegram_id INTEGER
+        )
+        """)
+        
         conn.commit()
         conn.close()
-        print("Created new database")
+        print("ℹ️ Создана новая база данных")
 
-    # Добавляем результат
+    # Добавляем результат (время в микросекундах)
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
+    
+    # Проверяем наличие пользователя в user_prefs
+    cur.execute("SELECT id FROM user_prefs WHERE nickname = ?", (nickname,))
+    if not cur.fetchone():
+        # Добавляем нового пользователя
+        cur.execute("""
+        INSERT INTO user_prefs (nickname)
+        VALUES (?)
+        """, (nickname,))
+    
+    # Добавляем результат выполнения
+    timestamp = datetime.utcnow().isoformat()
     cur.execute("""
     INSERT INTO results (nickname, exec_time, timestamp)
     VALUES (?, ?, ?)
-    """, (nickname, exec_time, datetime.utcnow().isoformat()))
+    """, (nickname, exec_time, timestamp))
+    
     conn.commit()
     conn.close()
-    print(f"Saved result for {nickname} with time {exec_time}s")
+    print(f"✅ Результат сохранен: {nickname} - {exec_time} μs")
 
-    # Загружаем обновленную БД
+    # Загружаем обновлённую БД
     if not upload_db():
-        print("Failed to upload updated database")
+        print("⚠️ Не удалось загрузить обновленную базу данных")
 
 if __name__ == "__main__":
     main()
