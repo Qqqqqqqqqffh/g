@@ -80,19 +80,19 @@ def upload_db():
 
 def main():
     nickname = os.getenv("GITHUB_ACTOR", "unknown")
-    exec_time = None
-
-    # Считываем время выполнения из аргумента (в микросекундах)
+    
+    # Получаем время выполнения из аргумента
     if len(sys.argv) > 1:
         try:
-            # Принимаем время в микросекундах как целое число
-            exec_time = int(sys.argv[1])
+            # Принимаем время в микросекундах как число с плавающей точкой
+            exec_time = float(sys.argv[1])
+            print(f"ℹ️ Получено время выполнения: {exec_time} μs")
         except ValueError:
             print("⚠️ Некорректное значение времени выполнения")
-            exec_time = 0
+            exec_time = 0.0
     else:
         print("⚠️ Время выполнения не передано")
-        exec_time = 0
+        exec_time = 0.0
 
     # Скачиваем БД или создаем новую
     if not download_db():
@@ -103,7 +103,7 @@ def main():
         CREATE TABLE IF NOT EXISTS results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nickname TEXT NOT NULL,
-            exec_time INTEGER NOT NULL,  -- В микросекундах
+            exec_time REAL NOT NULL,  -- REAL для микросекунд
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
         """)
@@ -121,7 +121,7 @@ def main():
         conn.close()
         print("ℹ️ Создана новая база данных")
 
-    # Добавляем результат (время в микросекундах)
+    # Добавляем результат
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     
@@ -133,6 +133,7 @@ def main():
         INSERT INTO user_prefs (nickname)
         VALUES (?)
         """, (nickname,))
+        print(f"ℹ️ Добавлен новый пользователь: {nickname}")
     
     # Добавляем результат выполнения
     timestamp = datetime.utcnow().isoformat()
