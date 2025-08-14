@@ -16,9 +16,9 @@ def send_photo(bot_token, chat_id, photo_path):
         data = {"chat_id": chat_id}
         resp = requests.post(url, data=data, files=files)
     if resp.status_code == 200:
-        print("✅ Фото отправлено в Telegram")
+        print("Фото отправлено в Telegram")
     else:
-        print(f"❌ Ошибка отправки: {resp.status_code} {resp.text}")
+        print(f"Ошибка отправки: {resp.status_code} {resp.text}")
 
 if __name__ == "__main__":
     send_photo(BOT_TOKEN, CHAT_ID, IMAGE_PATH)
