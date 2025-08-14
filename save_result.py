@@ -3,6 +3,8 @@ import os
 import requests
 import base64
 import sys
+import time
+import subprocess
 from datetime import datetime
 
 # Настройки
@@ -78,21 +80,39 @@ def upload_db():
         print(f"⚠️ Ошибка при загрузке базы данных: {str(e)}")
         return False
 
+def run_and_measure():
+    """Запускает программу и измеряет время выполнения с высокой точностью"""
+    try:
+        # Начало измерения времени
+        start_time = time.perf_counter_ns()
+        
+        # Запуск программы
+        result = subprocess.run(["./main"], capture_output=True, text=True)
+        
+        # Конец измерения времени
+        end_time = time.perf_counter_ns()
+        
+        # Рассчет времени выполнения в микросекундах
+        exec_time_ns = end_time - start_time
+        exec_time = exec_time_ns / 1000.0  # наносекунды -> микросекунды
+        
+        # Сохраняем вывод программы
+        with open("run_stdout.log", "w") as f:
+            f.write(result.stdout)
+        with open("run_stderr.log", "w") as f:
+            f.write(result.stderr)
+            
+        print(f"ℹ️ Время выполнения: {exec_time:.3f} μs")
+        return exec_time
+    except Exception as e:
+        print(f"⚠️ Ошибка при запуске программы: {str(e)}")
+        return 0.0
+
 def main():
     nickname = os.getenv("GITHUB_ACTOR", "unknown")
     
-    # Получаем время выполнения из аргумента
-    if len(sys.argv) > 1:
-        try:
-            # Принимаем время в микросекундах как число с плавающей точкой
-            exec_time = float(sys.argv[1])
-            print(f"ℹ️ Получено время выполнения: {exec_time} μs")
-        except ValueError:
-            print("⚠️ Некорректное значение времени выполнения")
-            exec_time = 0.0
-    else:
-        print("⚠️ Время выполнения не передано")
-        exec_time = 0.0
+    # Запускаем программу и измеряем время
+    exec_time = run_and_measure()
 
     # Скачиваем БД или создаем новую
     if not download_db():
@@ -144,7 +164,7 @@ def main():
     
     conn.commit()
     conn.close()
-    print(f"✅ Результат сохранен: {nickname} - {exec_time} μs")
+    print(f"✅ Результат сохранен: {nickname} - {exec_time:.3f} μs")
 
     # Загружаем обновлённую БД
     if not upload_db():
