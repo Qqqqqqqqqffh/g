@@ -13,6 +13,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: read
 
     steps:
     - name: Checkout repository
@@ -24,7 +25,8 @@ jobs:
     - name: Install tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y valgrind
+        sudo apt-get install -y valgrind sqlite3 python3-pip
+        pip install requests
 
     - name: Compile optimized (save logs)
       run: |
@@ -39,38 +41,66 @@ jobs:
       run: |
         valgrind --leak-check=full --error-exitcode=1 ./main > valgrind_stdout.log 2> valgrind_stderr.log || true
 
-    - name: Run optimized program (save logs)
+    - name: Run optimized program (measure time)
+      id: run_program
       run: |
+        start=$(date +%s%N)  # Наносекунды
         ./main > run_stdout.log 2> run_stderr.log
+        end=$(date +%s%N)
+        duration_ns=$((end - start))
+        duration_micro=$(echo "scale=3; $duration_ns / 1000" | bc)
+        echo "exec_time=$duration_micro" >> $GITHUB_OUTPUT
+        echo "start_time=$start" >> $GITHUB_OUTPUT
 
     - name: Save result to database
-      run: python3 save_result.py
+      run: python3 save_result.py ${{ steps.run_program.outputs.exec_time }}
       env:
         GITHUB_ACTOR: ${{ github.actor }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPO: ${{ github.repository }}
 
-    - name: Commit logs and database
+    - name: Get Telegram ID
+      id: get_telegram_id
       run: |
-        git config user.name "github-actions"
-        git config user.email "actions@users.noreply.github.com"
-        git add results.db compile_stdout.log compile_stderr.log run_stdout.log run_stderr.log cuda_memcheck.log valgrind_stdout.log valgrind_stderr.log
-        if [ -n "$(git status --porcelain)" ]; then
-          git commit -m "📊 Update results and logs for ${{ github.actor }}"
-          git push origin main
+        github_actor="${{ github.actor }}"
+        telegram_id=$(sqlite3 results.db "SELECT telegram_id FROM account_bindings WHERE github_username='$github_actor'")
+        if [ -z "$telegram_id" ]; then
+          echo "No Telegram ID found for $github_actor"
+          echo "telegram_id=0" >> $GITHUB_OUTPUT
         else
-          echo "No changes to commit"
+          echo "Telegram ID found: $telegram_id"
+          echo "telegram_id=$telegram_id" >> $GITHUB_OUTPUT
         fi
 
-    - name: Comment PR if valgrind errors found
-      if: always()
+    - name: Prepare logs archive
+      if: ${{ steps.get_telegram_id.outputs.telegram_id != '0' }}
       run: |
-        if grep -q "ERROR SUMMARY: [^0]*[1-9]" valgrind_stderr.log; then
-          gh pr comment ${{ github.event.workflow_run.pull_requests[0].number }} \
-            --body "⚠ Valgrind detected memory issues:\n\`\`\`\n$(cat valgrind_stderr.log)\n\`\`\`"
-        fi
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Конвертируем время запуска в читаемый формат
+        start_time_ns=${{ steps.run_program.outputs.start_time }}
+        start_time_sec=$(echo "$start_time_ns / 1000000000" | bc)
+        start_time_str=$(date -d @$start_time_sec +"%Y-%m-%d %H:%M:%S UTC")
+        
 
-    # Новый шаг: сохранение логов в артефактах
+        tar czf logs.tar.gz \
+            compile_stdout.log \
+            compile_stderr.log \
+            run_stdout.log \
+            run_stderr.log \
+            cuda_memcheck.log \
+            valgrind_stdout.log \
+            valgrind_stderr.log
+
+        echo "Benchmark run at: $start_time_str" > description.txt
+        echo "Duration: ${{ steps.run_program.outputs.exec_time }} μs" >> description.txt
+        echo "GitHub Actor: ${{ github.actor }}" >> description.txt
+        echo "Repository: ${{ github.repository }}" >> description.txt
+
+    - name: Send logs to Telegram
+      if: ${{ steps.get_telegram_id.outputs.telegram_id != '0' }}
+      run: python3 telegram_sender.py ${{ steps.get_telegram_id.outputs.telegram_id }}
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
     - name: Upload logs as artifacts
       uses: actions/upload-artifact@v4
       with:
