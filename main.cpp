@@ -8,7 +8,7 @@ int main() {
     std::vector<int> arr = {5, 3, 8, 4, 2};
     auto start = std::chrono::high_resolution_clock::now();
 
-    // Пузырьковая сортировка
+
     for (size_t i = 0; i < arr.size(); ++i) {
         for (size_t j = 0; j < arr.size() - i - 1; ++j) {
             if (arr[j] > arr[j + 1]) {
