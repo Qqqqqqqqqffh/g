@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <vector>
 #include <chrono>
+#include <thread>
 
 int main() {
     std::vector<int> arr = {5, 3, 8, 4, 2};
@@ -16,6 +17,8 @@ int main() {
             }
         }
     }
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(2391ms);
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end - start;
