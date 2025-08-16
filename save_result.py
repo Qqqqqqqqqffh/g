@@ -1,48 +1,41 @@
-import sqlite3
-import os
 import sys
+import os
+import requests
+import json
 from datetime import datetime
-
-DB_FILE = "results.db"
 
 def save_result(exec_time=None):
     nickname = os.getenv("GITHUB_ACTOR", "unknown")
-
+    server_url = os.getenv("YANDEX_SERVER_URL")
+    
+    if not server_url:
+        print("⚠️ YANDEX_SERVER_URL not set")
+        return
+    
+    # Обработка времени выполнения
     try:
         exec_time = float(exec_time) if exec_time else 0.0
     except ValueError:
-        print("using 0.0")
+        print("⚠️ Invalid exec_time, using 0.0")
         exec_time = 0.0
     
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nickname TEXT NOT NULL,
-        exec_time REAL NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-    ''')
+    # Формируем данные
+    data = {
+        "github_username": nickname,
+        "exec_time": exec_time,
+        "timestamp": datetime.utcnow().isoformat()
+    }
     
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS account_bindings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        telegram_id INTEGER NOT NULL,
-        github_username TEXT NOT NULL UNIQUE
-    )
-    ''')
-
-    timestamp = datetime.utcnow().isoformat()
-    cur.execute("""
-    INSERT INTO results (nickname, exec_time, timestamp)
-    VALUES (?, ?, ?)
-    """, (nickname, exec_time, timestamp))
-    
-    conn.commit()
-    conn.close()
-    print(f"✅ Результат сохранен: {nickname} - {exec_time:.3f} μs")
+    # Отправляем на сервер Яндекса
+    url = f"{server_url}/save_result"
+    try:
+        response = requests.post(url, json=data)
+        if response.status_code == 200:
+            print(f"✅ Result saved: {nickname} - {exec_time:.3f} μs")
+        else:
+            print(f"⚠️ Failed to save result: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"⚠️ Error saving result: {str(e)}")
 
 if __name__ == "__main__":
     exec_time_arg = sys.argv[1] if len(sys.argv) > 1 else None
