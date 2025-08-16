@@ -13,22 +13,18 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: read
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        ref: main
-        fetch-depth: 0
 
     - name: Install tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y valgrind sqlite3 python3-pip
+        sudo apt-get install -y valgrind sqlite3 python3-pip curl
         pip install requests
 
-    - name: Compile optimized (save logs)
+    - name: Compile optimized
       run: |
         cmake . > compile_stdout.log 2> compile_stderr.log
         make >> compile_stdout.log 2>> compile_stderr.log
@@ -50,22 +46,17 @@ jobs:
         duration_ns=$((end - start))
         duration_micro=$(echo "scale=3; $duration_ns / 1000" | bc)
         echo "exec_time=$duration_micro" >> $GITHUB_OUTPUT
-        echo "start_time=$start" >> $GITHUB_OUTPUT
-
-    - name: Save result to database
-      run: python3 save_result.py ${{ steps.run_program.outputs.exec_time }}
-      env:
-        GITHUB_ACTOR: ${{ github.actor }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_REPO: ${{ github.repository }}
+        echo "start_time=$(date -u +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_OUTPUT
 
     - name: Get Telegram ID
       id: get_telegram_id
       run: |
-        github_actor="${{ github.actor }}"
-        telegram_id=$(sqlite3 results.db "SELECT telegram_id FROM account_bindings WHERE github_username='$github_actor'")
-        if [ -z "$telegram_id" ]; then
-          echo "No Telegram ID found for $github_actor"
+        # Получаем данные с сервера Яндекса
+        response=$(curl -s "https://your-yandex-server.com/get_binding?github_username=${{ github.actor }}")
+        telegram_id=$(echo $response | jq -r '.telegram_id')
+        
+        if [ "$telegram_id" == "null" ] || [ -z "$telegram_id" ]; then
+          echo "No Telegram ID found for ${{ github.actor }}"
           echo "telegram_id=0" >> $GITHUB_OUTPUT
         else
           echo "Telegram ID found: $telegram_id"
@@ -75,12 +66,7 @@ jobs:
     - name: Prepare logs archive
       if: ${{ steps.get_telegram_id.outputs.telegram_id != '0' }}
       run: |
-        # Конвертируем время запуска в читаемый формат
-        start_time_ns=${{ steps.run_program.outputs.start_time }}
-        start_time_sec=$(echo "$start_time_ns / 1000000000" | bc)
-        start_time_str=$(date -d @$start_time_sec +"%Y-%m-%d %H:%M:%S UTC")
-        
-
+        # Создаем архив
         tar czf logs.tar.gz \
             compile_stdout.log \
             compile_stderr.log \
@@ -89,17 +75,25 @@ jobs:
             cuda_memcheck.log \
             valgrind_stdout.log \
             valgrind_stderr.log
+        
 
-        echo "Benchmark run at: $start_time_str" > description.txt
-        echo "Duration: ${{ steps.run_program.outputs.exec_time }} μs" >> description.txt
-        echo "GitHub Actor: ${{ github.actor }}" >> description.txt
-        echo "Repository: ${{ github.repository }}" >> description.txt
+        echo "🕒 Время запуска: ${{ steps.run_program.outputs.start_time }} UTC" > description.txt
+        echo "⏱ Длительность: ${{ steps.run_program.outputs.exec_time }} μs" >> description.txt
+        echo "👤 GitHub: ${{ github.actor }}" >> description.txt
+        echo "📦 Репозиторий: ${{ github.repository }}" >> description.txt
 
     - name: Send logs to Telegram
       if: ${{ steps.get_telegram_id.outputs.telegram_id != '0' }}
       run: python3 telegram_sender.py ${{ steps.get_telegram_id.outputs.telegram_id }}
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        YANDEX_SERVER_URL: "https://your-yandex-server.com"
+
+    - name: Save result to Yandex server
+      run: python3 save_result.py ${{ steps.run_program.outputs.exec_time }}
+      env:
+        YANDEX_SERVER_URL: "https://your-yandex-server.com"
+        GITHUB_ACTOR: ${{ github.actor }}
 
     - name: Upload logs as artifacts
       uses: actions/upload-artifact@v4
