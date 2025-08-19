@@ -66,23 +66,36 @@ jobs:
         
         echo "start_time=$(date -u +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_OUTPUT
 
-    - name: Get Telegram ID
-      id: get_telegram_id
-      run: |
-        # Используем IP вашего сервера
-        response=$(curl -s "http://89.169.163.78:8000/get_binding?github_username=${{ github.actor }}")
-        echo "Response: $response"
-        
-        telegram_id=$(echo $response | jq -r '.telegram_id')
-        
-        if [ "$telegram_id" == "null" ] || [ -z "$telegram_id" ]; then
-          echo "No Telegram ID found for ${{ github.actor }}"
-          echo "telegram_id=0" >> $GITHUB_OUTPUT
-        else
-          echo "Telegram ID found: $telegram_id"
-          echo "telegram_id=$telegram_id" >> $GITHUB_OUTPUT
-        fi
-
+- name: Get Telegram ID
+  id: get_telegram_id
+  run: |
+    set +e  # Отключаем немедленный выход при ошибках
+    
+    # Пытаемся подключиться к серверу
+    response=$(curl -s -w "\nHTTP_CODE:%{http_code}" "http://89.169.163.78:8000/get_binding?github_username=${{ github.actor }}")
+    
+    # Извлекаем HTTP код
+    http_code=$(echo "$response" | grep "HTTP_CODE:" | cut -d':' -f2)
+    json_response=$(echo "$response" | sed '/HTTP_CODE:/d')
+    
+    echo "HTTP Code: $http_code"
+    echo "Response: $json_response"
+    
+    if [ "$http_code" != "200" ]; then
+        echo "Server returned error: HTTP $http_code"
+        echo "telegram_id=0" >> $GITHUB_OUTPUT
+        exit 0
+    fi
+    
+    telegram_id=$(echo "$json_response" | jq -r '.telegram_id')
+    
+    if [ "$telegram_id" == "null" ] || [ -z "$telegram_id" ]; then
+        echo "No Telegram ID found for ${{ github.actor }}"
+        echo "telegram_id=0" >> $GITHUB_OUTPUT
+    else
+        echo "Telegram ID found: $telegram_id"
+        echo "telegram_id=$telegram_id" >> $GITHUB_OUTPUT
+    fi
     - name: Prepare logs archive
       if: ${{ steps.get_telegram_id.outputs.telegram_id != '0' }}
       run: |
