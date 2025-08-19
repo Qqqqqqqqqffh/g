@@ -22,7 +22,7 @@ jobs:
     - name: Install tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y valgrind sqlite3 python3-pip curl
+        sudo apt-get install -y valgrind sqlite3 python3-pip curl jq
         pip install requests
 
     - name: Compile optimized
@@ -38,21 +38,37 @@ jobs:
       run: |
         valgrind --leak-check=full --error-exitcode=1 ./main > valgrind_stdout.log 2> valgrind_stderr.log || true
 
-    - name: Run optimized program (measure time)
+    - name: Run program and capture timings
       id: run_program
       run: |
-        start=$(date +%s%N)  # Наносекунды
         ./main > run_stdout.log 2> run_stderr.log
-        end=$(date +%s%N)
-        duration_ns=$((end - start))
-        duration_micro=$(echo "scale=3; $duration_ns / 1000" | bc)
-        echo "exec_time=$duration_micro" >> $GITHUB_OUTPUT
+        
+        if [ -f "output.json" ]; then
+          echo "output.json found. Parsing timings..."
+          
+          timings_json=$(cat output.json | jq -c '.timings')
+          echo "timings=$timings_json" >> $GITHUB_OUTPUT
+          
+          timing_report=""
+          for key in $(jq -r '.timings | keys[]' output.json); do
+            value=$(jq -r ".timings.$key" output.json)
+            timing_report+="$key: $value seconds\n"
+          done
+          
+          echo "timing_report<<EOF" >> $GITHUB_OUTPUT
+          echo "$timing_report" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "output.json not found. No timings to report."
+          echo "timings={}" >> $GITHUB_OUTPUT
+          echo "timing_report=No timings data available" >> $GITHUB_OUTPUT
+        fi
+        
         echo "start_time=$(date -u +"%Y-%m-%d %H:%M:%S")" >> $GITHUB_OUTPUT
 
     - name: Get Telegram ID
       id: get_telegram_id
       run: |
-        # Получаем данные с сервера Яндекса
         response=$(curl -s "https://your-yandex-server.com/get_binding?github_username=${{ github.actor }}")
         telegram_id=$(echo $response | jq -r '.telegram_id')
         
@@ -67,8 +83,8 @@ jobs:
     - name: Prepare logs archive
       if: ${{ steps.get_telegram_id.outputs.telegram_id != '0' }}
       run: |
-        # Создаем архив
         tar czf logs.tar.gz \
+            output.json \
             compile_stdout.log \
             compile_stderr.log \
             run_stdout.log \
@@ -76,10 +92,10 @@ jobs:
             cuda_memcheck.log \
             valgrind_stdout.log \
             valgrind_stderr.log
-        
 
         echo "🕒 Время запуска: ${{ steps.run_program.outputs.start_time }} UTC" > description.txt
-        echo "⏱ Длительность: ${{ steps.run_program.outputs.exec_time }} μs" >> description.txt
+        echo "⏱ Результаты замеров:" >> description.txt
+        echo "${{ steps.run_program.outputs.timing_report }}" >> description.txt
         echo "👤 GitHub: ${{ github.actor }}" >> description.txt
         echo "📦 Репозиторий: ${{ github.repository }}" >> description.txt
 
@@ -90,17 +106,20 @@ jobs:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         YANDEX_SERVER_URL: "https://your-yandex-server.com"
 
-    - name: Save result to Yandex server
-      run: python3 save_result.py ${{ steps.run_program.outputs.exec_time }}
+    - name: Save results to Yandex server
+      run: python3 save_result.py
       env:
         YANDEX_SERVER_URL: "https://your-yandex-server.com"
         GITHUB_ACTOR: ${{ github.actor }}
+        TIMINGS_JSON: ${{ steps.run_program.outputs.timings }}
+        TIMESTAMP: ${{ steps.run_program.outputs.start_time }}
 
     - name: Upload logs as artifacts
       uses: actions/upload-artifact@v4
       with:
         name: benchmark-logs
         path: |
+          output.json
           compile_stdout.log
           compile_stderr.log
           run_stdout.log
