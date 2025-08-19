@@ -69,7 +69,10 @@ jobs:
     - name: Get Telegram ID
       id: get_telegram_id
       run: |
-        response=$(curl -s "https://your-yandex-server.com/get_binding?github_username=${{ github.actor }}")
+        # Используем IP вашего сервера
+        response=$(curl -s "http://89.169.163.78:8000/get_binding?github_username=${{ github.actor }}")
+        echo "Response: $response"
+        
         telegram_id=$(echo $response | jq -r '.telegram_id')
         
         if [ "$telegram_id" == "null" ] || [ -z "$telegram_id" ]; then
