@@ -4,7 +4,7 @@ import json
 import sys
 
 github_username = os.environ['GITHUB_ACTOR']
-api_url = os.environ['YANDEX_SERVER_URL'] + "/save_result"
+api_url = "http://89.169.163.78:8000/save_result"
 timings_json = os.environ.get('TIMINGS_JSON', '{}')
 timestamp = os.environ.get('TIMESTAMP')
 
