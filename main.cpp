@@ -1,10 +1,10 @@
-#include <iostream>
-#include <algorithm>
+
 #include <vector>
 #include <chrono>
 #include <fstream>
 #include "nlohmann/json.hpp"
-
+#include <iostream>
+#include <algorithm>
 using json = nlohmann::json;
 
 int main() {
