@@ -72,7 +72,7 @@ jobs:
     set +e  # Отключаем немедленный выход при ошибках
     
     # Пытаемся подключиться к серверу
-    response=$(curl -s -w "\nHTTP_CODE:%{http_code}" "http://89.169.163.78:8000/get_binding?github_username=${{ github.actor }}")
+    response=$(curl -s -w "\nHTTP_CODE:%{http_code}" "http://89.169.163.78:8000/get_binding?github_username=ivanl")
     
     # Извлекаем HTTP код
     http_code=$(echo "$response" | grep "HTTP_CODE:" | cut -d':' -f2)
